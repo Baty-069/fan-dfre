@@ -1,79 +1,93 @@
-const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycbxvBcGJUp4J0e5OMJjR1E0-WA7fOcUawxt2XVkNrv1F5o9-OL-uf1ViTFFIZJ0ti7LUEQ/exec
+const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycbxvBcGJUp4J0e5OMJjR1E0-WA7fOcUawxt2XVkNrv1F5o9-OL-uf1ViTFFIZJ0ti7LUEQ/exec;
+
 let stories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     loadStories();
-    setupEventListeners();
+    setupForm();
+    setupSortButtons();
 });
 
+// Загрузка историй из Google Sheets через Apps Script
 async function loadStories() {
     try {
         const response = await fetch(GOOGLE_SCRIPT_URL);
         const data = await response.json();
         stories = data.stories || [];
         displayStories('newest');
+        updateStats();
     } catch (error) {
-        console.error('Ошибка загрузки:', error);
+        console.log('Ошибка загрузки. Используем локальные данные.');
         stories = JSON.parse(localStorage.getItem('vetaFanStories')) || [];
         displayStories('newest');
+        updateStats();
     }
 }
 
-function setupEventListeners() {
-    const storyForm = document.getElementById('storyForm');
-    if (storyForm) {
-        storyForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const author = document.getElementById('authorName').value.trim();
-            const title = document.getElementById('storyTitle').value.trim();
-            const content = document.getElementById('storyContent').value.trim();
-            
-            if (author && title && content) {
-                const newStory = {
-                    id: Date.now(),
-                    author: author,
-                    title: title,
-                    content: content,
-                    date: new Date().toLocaleDateString('ru-RU', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    }),
-                    likes: 0
-                };
-                
-                // Сохраняем в Google Sheets
-                await saveStoryToGoogleSheets(newStory);
-                
-                // Добавляем локально
-                stories.unshift(newStory);
-                displayStories('newest');
-                storyForm.reset();
-                showNotification('История опубликована!');
-            }
-        });
-    }
-}
-
+// Отправка новой истории
 async function saveStoryToGoogleSheets(story) {
     try {
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(story)
         });
+        return true;
     } catch (error) {
-        console.log('Сохранено локально');
-        localStorage.setItem('vetaFanStories', JSON.stringify(stories));
+        console.log('Не удалось сохранить в Google Sheets');
+        return false;
     }
 }
 
+// Обработчик формы
+function setupForm() {
+    const form = document.getElementById('storyForm');
+    if (!form) return;
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const author = document.getElementById('authorName').value.trim();
+        const title = document.getElementById('storyTitle').value.trim();
+        const content = document.getElementById('storyContent').value.trim();
+        
+        if (author && title && content) {
+            const newStory = {
+                id: Date.now(),
+                author: author,
+                title: title,
+                content: content,
+                date: new Date().toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
+                likes: 0
+            };
+            
+            // Сохраняем в Google Sheets
+            const savedToCloud = await saveStoryToGoogleSheets(newStory);
+            
+            // Сохраняем локально
+            stories.unshift(newStory);
+            localStorage.setItem('vetaFanStories', JSON.stringify(stories));
+            
+            displayStories('newest');
+            form.reset();
+            updateStats();
+            
+            if (savedToCloud) {
+                showNotification('История опубликована и видна на всех устройствах!');
+            } else {
+                showNotification('История сохранена локально. В облаке пока не видна.');
+            }
+        }
+    });
+}
 // Остальные функции (displayStories, toggleLike и т.д.) оставьте как были
     // Функция отображения историй
     function displayStories(sortType) {
@@ -274,4 +288,5 @@ async function saveStoryToGoogleSheets(story) {
     }
 
 });
+
 
