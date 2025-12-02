@@ -1,53 +1,80 @@
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/ВАШ_ID/exec';
+let stories = [];
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Элементы DOM
+    loadStories();
+    setupEventListeners();
+});
+
+async function loadStories() {
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL);
+        const data = await response.json();
+        stories = data.stories || [];
+        displayStories('newest');
+    } catch (error) {
+        console.error('Ошибка загрузки:', error);
+        stories = JSON.parse(localStorage.getItem('vetaFanStories')) || [];
+        displayStories('newest');
+    }
+}
+
+function setupEventListeners() {
     const storyForm = document.getElementById('storyForm');
-    const storiesContainer = document.getElementById('storiesContainer');
-    const noStories = document.getElementById('noStories');
-    const sortButtons = document.querySelectorAll('.sort-btn');
-    
-    // Загружаем истории из localStorage
-    let stories = JSON.parse(localStorage.getItem('vetaFanStories')) || [];
-    
-    // Инициализация
-    displayStories('newest');
-    
-    // Обработчик формы
-    storyForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const author = document.getElementById('authorName').value.trim();
-        const title = document.getElementById('storyTitle').value.trim();
-        const content = document.getElementById('storyContent').value.trim();
-        
-        if (author && title && content) {
-            const newStory = {
-                id: Date.now(),
-                author: author,
-                title: title,
-                content: content,
-                date: new Date().toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                }),
-                likes: 0,
-                likedByUser: false
-            };
+    if (storyForm) {
+        storyForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            stories.unshift(newStory);
-            saveStories();
-            displayStories('newest');
+            const author = document.getElementById('authorName').value.trim();
+            const title = document.getElementById('storyTitle').value.trim();
+            const content = document.getElementById('storyContent').value.trim();
             
-            // Сброс формы
-            storyForm.reset();
-            
-            // Показываем уведомление
-            showNotification('История успешно опубликована!');
-        }
-    });
-    
+            if (author && title && content) {
+                const newStory = {
+                    id: Date.now(),
+                    author: author,
+                    title: title,
+                    content: content,
+                    date: new Date().toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }),
+                    likes: 0
+                };
+                
+                // Сохраняем в Google Sheets
+                await saveStoryToGoogleSheets(newStory);
+                
+                // Добавляем локально
+                stories.unshift(newStory);
+                displayStories('newest');
+                storyForm.reset();
+                showNotification('История опубликована!');
+            }
+        });
+    }
+}
+
+async function saveStoryToGoogleSheets(story) {
+    try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(story)
+        });
+    } catch (error) {
+        console.log('Сохранено локально');
+        localStorage.setItem('vetaFanStories', JSON.stringify(stories));
+    }
+}
+
+// Остальные функции (displayStories, toggleLike и т.д.) оставьте как были
     // Функция отображения историй
     function displayStories(sortType) {
         let storiesToDisplay = [...stories];
@@ -245,4 +272,5 @@ document.addEventListener('DOMContentLoaded', function() {
         saveStories();
         displayStories('newest');
     }
+
 });
