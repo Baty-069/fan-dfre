@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Фан клуб Веты</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1><i class="fas fa-heart"></i> Фан клуб Веты</h1>
+            <p class="subtitle">Делитесь своими историями и впечатлениями о нашей любимой Вете!</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <div class="hero-content">
+                <h2>Приветствуем в фан-клубе Веты!</h2>
+                <p>Это место, где поклонники собираются, чтобы делиться историями, воспоминаниями и теплыми словами о Вете. Присоединяйтесь к нашему сообществу!</p>
+            </div>
+            <div class="hero-image">
+                <i class="fas fa-star"></i>
+            </div>
+        </section>
+
+        <section class="add-story">
+            <h2><i class="fas fa-pen"></i> Написать историю</h2>
+            <form id="storyForm">
+                <input type="text" id="authorName" placeholder="Ваше имя" required>
+                <input type="text" id="storyTitle" placeholder="Заголовок истории" required>
+                <textarea id="storyContent" placeholder="Поделитесь вашей историей о Вете..." rows="5" required></textarea>
+                <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Опубликовать историю</button>
+            </form>
+        </section>
+
+        <section class="stories-section">
+            <h2><i class="fas fa-book-open"></i> Истории фанатов</h2>
+            <div class="sort-options">
+                <button class="sort-btn active" data-sort="newest">Самые новые</button>
+                <button class="sort-btn" data-sort="popular">Самые популярные</button>
+            </div>
+            <div id="storiesContainer">
+                <!-- Истории будут загружаться здесь -->
+            </div>
+            <div id="noStories" class="no-stories">
+                <i class="fas fa-feather-alt"></i>
+                <p>Пока здесь нет историй. Будьте первым, кто поделится!</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>© 2023 Фан клуб Веты. Все истории принадлежат их авторам.</p>
+            <p class="footer-love">Сделано с <i class="fas fa-heart"></i> для поклонников Веты</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
