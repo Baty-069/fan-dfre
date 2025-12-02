@@ -285,10 +285,4 @@ function setupForm() {
         stories = exampleStories;
         saveStories();
         displayStories('newest');
-    }
-
-}
-
-
-
-
+    }}
