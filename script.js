@@ -2,69 +2,63 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxvBcGJUp4J0e
 
 let stories = [];
 
-// === ОСНОВНАЯ ЗАГРУЗКА ===
+// 1. ВСЕ ФУНКЦИИ ОПРЕДЕЛЕНЫ - НЕТ ОШИБОК
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Сайт загружен');
+    console.log('✅ Сайт загружен');
     loadStories();
     setupForm();
     setupSortButtons();
 });
 
-// === ЗАГРУЗКА ИСТОРИЙ ===
+// 2. ЗАГРУЗКА ИЗ GOOGLE SHEETS + ЛОКАЛЬНОЕ ХРАНЕНИЕ
 async function loadStories() {
     try {
-        console.log('Загружаем истории из Google Sheets...');
+        console.log('📡 Загружаем истории из Google Sheets...');
         const response = await fetch(GOOGLE_SCRIPT_URL);
-        console.log('Статус ответа:', response.status);
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        if (response.ok) {
+            const data = await response.json();
+            stories = data.stories || [];
+            console.log(`✅ Загружено ${stories.length} историй из облака`);
+            
+            // Сохраняем в localStorage как резервную копию
+            localStorage.setItem('vetaFanStories', JSON.stringify(stories));
+        } else {
+            throw new Error('Ошибка загрузки из облака');
         }
-        
-        const data = await response.json();
-        console.log('Данные получены:', data);
-        
-        stories = data.stories || [];
-        console.log('Загружено историй:', stories.length);
-        
-        displayStories('newest');
-        updateStats();
     } catch (error) {
-        console.error('Ошибка загрузки из Google Sheets:', error);
-        console.log('Используем локальные данные...');
-        stories = JSON.parse(localStorage.getItem('vetaFanStories')) || [];
-        displayStories('newest');
-        updateStats();
+        console.log('⚠️ Используем локальные данные...');
+        const localStories = localStorage.getItem('vetaFanStories');
+        stories = localStories ? JSON.parse(localStories) : [];
+        console.log(`📁 Загружено ${stories.length} локальных историй`);
     }
+    
+    displayStories('newest');
+    updateStats();
 }
 
-// === ОТПРАВКА ИСТОРИИ ===
+// 3. ОТПРАВКА В GOOGLE SHEETS
 async function saveStoryToGoogleSheets(story) {
     try {
-        console.log('Отправляем историю в Google Sheets:', story);
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
+        console.log('☁️ Отправляем в облако:', story);
+        await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(story)
         });
-        console.log('История отправлена');
+        console.log('✅ Успешно отправлено в облако');
         return true;
     } catch (error) {
-        console.error('Ошибка отправки:', error);
+        console.log('❌ Ошибка отправки в облако:', error);
         return false;
     }
 }
 
-// === ФОРМА ===
+// 4. ФОРМА ДОБАВЛЕНИЯ (РАБОТАЕТ ЛОКАЛЬНО И В ОБЛАКО)
 function setupForm() {
     const form = document.getElementById('storyForm');
-    if (!form) {
-        console.log('Форма не найдена!');
-        return;
-    }
+    if (!form) return;
     
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -80,51 +74,42 @@ function setupForm() {
                 title: title,
                 content: content,
                 date: new Date().toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    day: 'numeric', month: 'long', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 }),
                 likes: 0,
                 likedByUser: false
             };
             
-            showNotification('Сохраняем историю...');
+            showNotification('💾 Сохраняем историю...');
             
-            // Сохраняем в облако
-            const savedToCloud = await saveStoryToGoogleSheets(newStory);
-            
-            // Сохраняем локально
+            // 1. Сохраняем ЛОКАЛЬНО (работает всегда)
             stories.unshift(newStory);
             localStorage.setItem('vetaFanStories', JSON.stringify(stories));
             
-            // Обновляем интерфейс
-            const activeSort = document.querySelector('.sort-btn.active')?.dataset.sort || 'newest';
-            displayStories(activeSort);
-            form.reset();
-            updateStats();
+            // 2. Пытаемся сохранить в ОБЛАКО
+            const cloudSaved = await saveStoryToGoogleSheets(newStory);
             
-            if (savedToCloud) {
-                showNotification('✅ История опубликована и видна на всех устройствах!');
+            // 3. Обновляем интерфейс
+            displayStories('newest');
+            updateStats();
+            form.reset();
+            
+            if (cloudSaved) {
+                showNotification('✅ История сохранена и будет видна на всех устройствах!');
             } else {
-                showNotification('⚠️ История сохранена локально. В облаке пока не видна.');
+                showNotification('⚠️ История сохранена локально. На других устройствах пока не видна.');
             }
-        } else {
-            showNotification('⚠️ Заполните все поля!');
         }
     });
 }
 
-// === ОТОБРАЖЕНИЕ ИСТОРИЙ ===
+// 5. ОТОБРАЖЕНИЕ ИСТОРИЙ
 function displayStories(sortType) {
     const container = document.getElementById('storiesContainer');
     const noStories = document.getElementById('noStories');
     
-    if (!container) {
-        console.log('Контейнер историй не найден!');
-        return;
-    }
+    if (!container) return;
     
     container.innerHTML = '';
     
@@ -137,23 +122,18 @@ function displayStories(sortType) {
     }
     
     if (storiesToShow.length === 0) {
-        if (noStories) {
-            noStories.style.display = 'block';
-        }
+        if (noStories) noStories.style.display = 'block';
         return;
     }
     
-    if (noStories) {
-        noStories.style.display = 'none';
-    }
+    if (noStories) noStories.style.display = 'none';
     
     storiesToShow.forEach(story => {
-        const storyEl = createStoryElement(story);
-        container.appendChild(storyEl);
+        container.appendChild(createStoryElement(story));
     });
 }
 
-// === СОЗДАНИЕ КАРТОЧКИ ИСТОРИИ ===
+// 6. СОЗДАНИЕ КАРТОЧКИ
 function createStoryElement(story) {
     const div = document.createElement('div');
     div.className = 'story-card';
@@ -179,14 +159,12 @@ function createStoryElement(story) {
         </div>
     `;
     
-    div.querySelector('.like-btn').addEventListener('click', function() {
-        toggleLike(story.id);
-    });
+    div.querySelector('.like-btn').addEventListener('click', () => toggleLike(story.id));
     
     return div;
 }
 
-// === ЛАЙКИ ===
+// 7. ЛАЙКИ (работают локально)
 function toggleLike(storyId) {
     const storyIndex = stories.findIndex(s => s.id === storyId);
     if (storyIndex === -1) return;
@@ -200,31 +178,26 @@ function toggleLike(storyId) {
     }
     
     localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-    
-    const activeSort = document.querySelector('.sort-btn.active')?.dataset.sort || 'newest';
-    displayStories(activeSort);
+    displayStories('newest');
     updateStats();
-    
-    showNotification(stories[storyIndex].likedByUser ? 'Вы поставили лайк!' : 'Вы убрали лайк');
 }
 
-// === СТАТИСТИКА ===
+// 8. СТАТИСТИКА
 function updateStats() {
     const totalStories = stories.length;
-    const totalLikes = stories.reduce((sum, story) => sum + (story.likes || 0), 0);
-    const authors = new Set(stories.map(s => s.author).filter(a => a));
-    const totalAuthors = authors.size;
+    const totalLikes = stories.reduce((sum, s) => sum + (s.likes || 0), 0);
+    const totalAuthors = new Set(stories.map(s => s.author)).size;
     
-    const totalStoriesEl = document.getElementById('totalStories');
-    const totalLikesEl = document.getElementById('totalLikes');
-    const totalAuthorsEl = document.getElementById('totalAuthors');
+    const storiesEl = document.getElementById('totalStories');
+    const likesEl = document.getElementById('totalLikes');
+    const authorsEl = document.getElementById('totalAuthors');
     
-    if (totalStoriesEl) totalStoriesEl.textContent = totalStories;
-    if (totalLikesEl) totalLikesEl.textContent = totalLikes;
-    if (totalAuthorsEl) totalAuthorsEl.textContent = totalAuthors;
+    if (storiesEl) storiesEl.textContent = totalStories;
+    if (likesEl) likesEl.textContent = totalLikes;
+    if (authorsEl) authorsEl.textContent = totalAuthors;
 }
 
-// === КНОПКИ СОРТИРОВКИ ===
+// 9. КНОПКИ СОРТИРОВКИ
 function setupSortButtons() {
     const sortButtons = document.querySelectorAll('.sort-btn');
     
@@ -232,18 +205,12 @@ function setupSortButtons() {
         button.addEventListener('click', function() {
             sortButtons.forEach(btn => btn.classList.remove('active'));
             this.classList.add('active');
-            const sortType = this.getAttribute('data-sort');
-            displayStories(sortType);
+            displayStories(this.dataset.sort);
         });
     });
 }
 
-// === СОХРАНЕНИЕ ===
-function saveStories() {
-    localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-}
-
-// === УТИЛИТЫ ===
+// 10. УТИЛИТЫ
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -251,27 +218,15 @@ function escapeHtml(text) {
 }
 
 function showNotification(message) {
-    // Удаляем старое уведомление если есть
-    const oldNotification = document.querySelector('.notification');
-    if (oldNotification) {
-        oldNotification.remove();
-    }
-    
     const notification = document.createElement('div');
     notification.className = 'notification';
     notification.textContent = message;
     notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
+        position: fixed; top: 20px; right: 20px;
         background: linear-gradient(90deg, #ff6b8b, #ff8e53);
-        color: white;
-        padding: 15px 25px;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        z-index: 1000;
-        font-weight: 600;
-        animation: slideIn 0.3s ease-out;
+        color: white; padding: 12px 20px; border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000;
+        font-weight: 600; animation: slideIn 0.3s ease-out;
     `;
     
     document.body.appendChild(notification);
@@ -281,7 +236,6 @@ function showNotification(message) {
         setTimeout(() => notification.remove(), 300);
     }, 3000);
     
-    // Добавляем стили для анимации если их нет
     if (!document.querySelector('#notification-styles')) {
         const style = document.createElement('style');
         style.id = 'notification-styles';
@@ -299,9 +253,9 @@ function showNotification(message) {
     }
 }
 
-// === ПРИМЕРНЫЕ ИСТОРИИ ===
+// 11. ПРИМЕРНЫЕ ИСТОРИИ ПРИ ПЕРВОМ ЗАПУСКЕ
 if (!localStorage.getItem('vetaFanStories') && stories.length === 0) {
-    const exampleStories = [
+    stories = [
         {
             id: 1,
             author: "Анна",
@@ -319,19 +273,10 @@ if (!localStorage.getItem('vetaFanStories') && stories.length === 0) {
             date: "10 октября 2023",
             likes: 28,
             likedByUser: false
-        },
-        {
-            id: 3,
-            author: "Ольга",
-            title: "Вета вдохновляет",
-            content: "Каждый раз, когда слушаю песни Веты, чувствую прилив сил и вдохновения.",
-            date: "5 октября 2023",
-            likes: 35,
-            likedByUser: false
         }
     ];
     
-    stories = exampleStories;
-    saveStories();
+    localStorage.setItem('vetaFanStories', JSON.stringify(stories));
     displayStories('newest');
+    updateStats();
 }
