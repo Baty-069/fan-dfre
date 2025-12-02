@@ -287,7 +287,8 @@ function setupForm() {
         displayStories('newest');
     }
 
-});
+}
+
 
 
 
