@@ -1,4 +1,4 @@
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/ВАШ_ID/exec';
+const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycbxvBcGJUp4J0e5OMJjR1E0-WA7fOcUawxt2XVkNrv1F5o9-OL-uf1ViTFFIZJ0ti7LUEQ/exec
 let stories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -274,3 +274,4 @@ async function saveStoryToGoogleSheets(story) {
     }
 
 });
+
