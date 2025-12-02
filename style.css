@@ -3,6 +3,14 @@
     padding: 0;
     box-sizing: border-box;
 }
+body {
+    background: linear-gradient(135deg, #f5f0ff 0%, #e6e6fa 100%);
+    min-height: 100vh;
+}
+
+header {
+    background: linear-gradient(90deg, #8a2be2, #9370db);
+}
 
 body {
     font-family: 'Montserrat', sans-serif;
@@ -21,7 +29,7 @@ body {
 
 /* Шапка */
 header {
-    background: linear-gradient(90deg, #ff6b8b, #ff8e53);
+    background: linear-gradient(90deg, #8a2be2, #9370db);
     color: white;
     padding: 2rem 0;
     text-align: center;
@@ -62,7 +70,7 @@ main {
 }
 
 .hero h2 {
-    color: #ff6b8b;
+    color: #8a2be2;
     font-size: 2rem;
     margin-bottom: 1rem;
 }
@@ -74,7 +82,7 @@ main {
 
 .hero-image {
     font-size: 8rem;
-    color: #ffd166;
+    color:  #da70d6;
     margin-left: 2rem;
     animation: pulse 2s infinite;
 }
@@ -95,7 +103,7 @@ main {
 }
 
 .add-story h2 {
-    color: #ff6b8b;
+    color: #8a2be2;
     margin-bottom: 1.5rem;
     font-size: 1.8rem;
 }
@@ -115,11 +123,11 @@ main {
 #storyForm input:focus,
 #storyForm textarea:focus {
     outline: none;
-    border-color: #ff6b8b;
+    border-color: #8a2be2;
 }
 
 .btn {
-    background: linear-gradient(90deg, #ff6b8b, #ff8e53);
+    background: linear-gradient(90deg, #8a2be2, #9370db);
     color: white;
     border: none;
     padding: 12px 25px;
@@ -147,7 +155,7 @@ main {
 }
 
 .stories-section h2 {
-    color: #ff6b8b;
+    color: #8a2be2;
     margin-bottom: 1.5rem;
     font-size: 1.8rem;
 }
@@ -169,7 +177,7 @@ main {
 }
 
 .sort-btn.active {
-    background: linear-gradient(90deg, #ff6b8b, #ff8e53);
+    background: linear-gradient(90deg, #8a2be2, #9370db);
     color: white;
 }
 
@@ -201,7 +209,7 @@ main {
 
 .story-author {
     font-weight: 600;
-    color: #ff6b8b;
+    color: #8a2be2;
     font-size: 1.1rem;
 }
 
@@ -231,7 +239,7 @@ main {
 
 .like-btn {
     background: #ffebee;
-    color: #ff6b8b;
+    color: #8a2be2;
     border: none;
     padding: 8px 16px;
     border-radius: 20px;
@@ -248,7 +256,7 @@ main {
 }
 
 .like-btn.liked {
-    background: #ff6b8b;
+    background: #8a2be2;
     color: white;
 }
 
@@ -266,7 +274,7 @@ main {
 .no-stories i {
     font-size: 4rem;
     margin-bottom: 1rem;
-    color: #ffd166;
+    color:  #da70d6;
 }
 
 .no-stories p {
@@ -287,7 +295,7 @@ footer p {
 }
 
 .footer-love {
-    color: #ff6b8b;
+    color: #8a2be2;
     font-weight: 600;
 }
 
@@ -313,4 +321,5 @@ footer p {
         align-items: flex-start;
         gap: 5px;
     }
+
 }
