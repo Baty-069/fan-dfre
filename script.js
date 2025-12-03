@@ -1,4 +1,4 @@
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby39DxMjetd73rdn896heh-W5s4uvipZYiz3hR5D--ofM_nk79wVJwX9EySxAqjC4Rk/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRTZG_M6X6P4Ijk3zKlmvyN93Xn0vTwdYfDmzFrPOYPMX_VYeC3R0T51C8b9I_X735/exec';
 
 let stories = [];
 
@@ -360,3 +360,4 @@ if (stories.length === 0 && !localStorage.getItem('vetaStories')) {
     displayStories('newest');
     updateStats();
 }
+
