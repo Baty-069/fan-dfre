@@ -5,30 +5,20 @@ let stories = [];
 // === 1. ЗАГРУЗКА САЙТА ===
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎵 Фан-клуб Веты загружен!');
-    initApp();
-});
-
-async function initApp() {
-    // Загружаем истории (сначала из кэша, потом из облака)
-    await loadStories();
-    
-    // Настраиваем интерфейс
+    loadStories();
     setupForm();
     setupSortButtons();
-    updateStats();
-    
-    console.log('✅ Приложение готово!');
-}
+});
 
-// === 2. ЗАГРУЗКА ИСТОРИЙ (JSONP) ===
-async function loadStories() {
+// === 2. JSONP ЗАГРУЗКА ИЗ ОБЛАКА ===
+function loadStories() {
     console.log('📥 Загружаем истории...');
     
-    // Сначала из localStorage (быстро)
+    // Сначала грузим из localStorage
     loadFromLocalStorage();
     
-    // Потом из облака (JSONP)
-    await loadFromCloudJSONP();
+    // Потом из облака через JSONP
+    loadFromCloudJSONP();
     
     // Показываем
     displayStories('newest');
@@ -41,218 +31,195 @@ function loadFromLocalStorage() {
     if (saved) {
         try {
             stories = JSON.parse(saved);
-            console.log(`📱 Локальные истории: ${stories.length}`);
+            console.log(`📱 Из кэша: ${stories.length} историй`);
         } catch (e) {
-            console.log('❌ Ошибка загрузки кэша');
+            console.log('❌ Ошибка кэша');
             stories = [];
         }
+    } else {
+        console.log('📭 Кэш пуст');
+        stories = [];
     }
 }
 
-// JSONP загрузка из облака
+// JSONP загрузка (без CORS!)
 function loadFromCloudJSONP() {
-    return new Promise((resolve) => {
-        console.log('☁️ JSONP запрос к облаку...');
+    console.log('☁️ JSONP загрузка из облака...');
+    
+    // Создаем уникальное имя функции
+    const callbackName = 'cloudCallback_' + Date.now();
+    
+    // Создаем script тег
+    const script = document.createElement('script');
+    script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}&_=${Date.now()}`;
+    
+    // Функция обратного вызова
+    window[callbackName] = function(data) {
+        console.log('📡 JSONP ответ получен:', data);
         
-        // Создаем уникальное имя функции
-        const callbackName = 'jsonpCallback_' + Date.now();
-        
-        // Создаем script тег
-        const script = document.createElement('script');
-        script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}&t=${Date.now()}`;
-        
-        // Функция обратного вызова
-        window[callbackName] = function(data) {
-            console.log('📡 JSONP ответ:', data);
+        if (data && data.success && data.stories) {
+            const cloudStories = data.stories || [];
+            console.log(`✅ Из облака: ${cloudStories.length} историй`);
             
-            if (data && data.success && data.stories) {
-                console.log(`✅ Облачные истории: ${data.stories.length}`);
-                
-                // Объединяем с локальными (убираем дубликаты)
-                const cloudStories = data.stories || [];
-                const allStories = [...cloudStories, ...stories];
-                
-                // Убираем дубликаты по ID
-                const seen = new Set();
-                stories = allStories.filter(story => {
-                    if (seen.has(story.id)) return false;
-                    seen.add(story.id);
-                    return true;
-                });
-                
-                // Сохраняем в localStorage
-                saveToLocalStorage();
-            } else if (data && data.error) {
-                console.log('❌ Ошибка облака:', data.error);
-            }
+            // Объединяем с локальными
+            const allStories = [...cloudStories, ...stories];
             
-            // Очистка
+            // Убираем дубликаты
+            const seen = new Set();
+            stories = allStories.filter(story => {
+                if (seen.has(story.id)) return false;
+                seen.add(story.id);
+                return true;
+            });
+            
+            // Сохраняем в localStorage
+            localStorage.setItem('vetaStories', JSON.stringify(stories));
+            
+            // Обновляем интерфейс
+            displayStories('newest');
+            updateStats();
+        }
+        
+        // Очистка
+        if (script.parentNode) {
             document.head.removeChild(script);
-            delete window[callbackName];
-            resolve();
-        };
-        
-        // Обработка ошибок
-        script.onerror = function() {
-            console.log('⚠️ JSONP запрос не удался');
+        }
+        delete window[callbackName];
+    };
+    
+    // Обработка ошибок
+    script.onerror = function() {
+        console.log('⚠️ JSONP не сработал');
+        if (script.parentNode) {
             document.head.removeChild(script);
+        }
+        if (window[callbackName]) {
             delete window[callbackName];
-            resolve();
-        };
-        
-        // Таймаут
-        setTimeout(() => {
-            if (script.parentNode) {
-                console.log('⏰ JSONP таймаут');
-                document.head.removeChild(script);
-                if (window[callbackName]) delete window[callbackName];
-                resolve();
-            }
-        }, 10000);
-        
-        // Добавляем script
-        document.head.appendChild(script);
-    });
+        }
+    };
+    
+    // Добавляем script
+    document.head.appendChild(script);
 }
 
-// JSONP отправка в облако
+// === 3. JSONP ОТПРАВКА В ОБЛАКО ===
 function saveToCloudJSONP(story) {
     return new Promise((resolve) => {
         console.log('📤 JSONP отправка в облако...');
         
-        const callbackName = 'jsonpPostCallback_' + Date.now();
+        const callbackName = 'saveCallback_' + Date.now();
         
-        // Создаем form для отправки данных
+        // Создаем form для отправки
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = GOOGLE_SCRIPT_URL;
         form.style.display = 'none';
         
-        // Добавляем callback параметр
+        // Параметр callback для JSONP
         const callbackInput = document.createElement('input');
         callbackInput.name = 'callback';
         callbackInput.value = callbackName;
         form.appendChild(callbackInput);
         
         // Добавляем данные истории
-        for (const key in story) {
+        Object.keys(story).forEach(key => {
             const input = document.createElement('input');
             input.name = key;
-            input.value = typeof story[key] === 'object' 
-                ? JSON.stringify(story[key]) 
-                : story[key];
+            input.value = story[key];
             form.appendChild(input);
-        }
+        });
         
-        // Функция обратного вызова
-        window[callbackName] = function(response) {
-            console.log('📨 JSONP ответ на запись:', response);
-            
-            if (response && response.success) {
-                console.log('✅ Успешно отправлено в облако!');
-                resolve(true);
-            } else {
-                console.log('❌ Ошибка отправки в облако:', response?.error);
-                resolve(false);
-            }
-            
-            // Очистка
-            document.body.removeChild(form);
-            delete window[callbackName];
-        };
-        
-        // Добавляем form в документ
-        document.body.appendChild(form);
-        
-        // Создаем iframe для отправки
+        // Создаем iframe для ответа
         const iframe = document.createElement('iframe');
-        iframe.name = 'jsonpIframe_' + Date.now();
+        iframe.name = 'jsonpFrame';
         iframe.style.display = 'none';
+        
+        // Обработка загрузки iframe
         iframe.onload = function() {
-            // Читаем ответ из iframe
             try {
+                // Читаем ответ
                 const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                const scriptTags = iframeDoc.getElementsByTagName('script');
-                if (scriptTags.length > 0) {
+                const scripts = iframeDoc.getElementsByTagName('script');
+                
+                if (scripts.length > 0) {
                     // Выполняем JSONP код
-                    eval(scriptTags[0].textContent);
+                    eval(scripts[0].textContent);
                 }
             } catch (e) {
-                console.log('❌ Ошибка чтения ответа iframe');
+                console.log('❌ Ошибка чтения ответа');
                 resolve(false);
             }
             
             // Очистка
             setTimeout(() => {
-                document.body.removeChild(iframe);
+                if (form.parentNode) document.body.removeChild(form);
+                if (iframe.parentNode) document.body.removeChild(iframe);
             }, 1000);
         };
         
+        // Функция обратного вызова
+        window[callbackName] = function(response) {
+            console.log('📨 Ответ от сервера:', response);
+            
+            if (response && response.success) {
+                console.log('✅ Успешно отправлено в облако!');
+                resolve(true);
+            } else {
+                console.log('❌ Ошибка отправки');
+                resolve(false);
+            }
+            
+            delete window[callbackName];
+        };
+        
+        // Добавляем в документ
         document.body.appendChild(iframe);
-        form.target = iframe.name;
+        document.body.appendChild(form);
+        
+        // Устанавливаем target и отправляем
+        form.target = 'jsonpFrame';
         form.submit();
         
         // Таймаут
         setTimeout(() => {
-            console.log('⏰ Таймаут отправки JSONP');
+            console.log('⏰ Таймаут отправки');
             resolve(false);
-        }, 10000);
+        }, 5000);
     });
 }
 
-// Сохранение в localStorage
-function saveToLocalStorage() {
-    localStorage.setItem('vetaStories', JSON.stringify(stories));
-    console.log(`💾 Сохранено в кэш: ${stories.length} историй`);
-}
-
-// === 3. ДОБАВЛЕНИЕ ИСТОРИИ ===
+// === 4. ДОБАВЛЕНИЕ ИСТОРИИ ===
 async function addNewStory(author, title, content) {
     const newStory = {
         id: Date.now(),
         author: author,
         title: title,
         content: content,
-        date: new Date().toLocaleDateString('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        }),
+        date: new Date().toLocaleDateString('ru-RU'),
         likes: 0,
         likedByUser: false
     };
     
     console.log('➕ Новая история:', newStory);
     
-    // 1. Добавляем в массив
+    // 1. Добавляем локально
     stories.unshift(newStory);
+    localStorage.setItem('vetaStories', JSON.stringify(stories));
     
-    // 2. Сохраняем локально (гарантированно)
-    saveToLocalStorage();
+    // 2. Пробуем отправить в облако
+    const cloudSuccess = await saveToCloudJSONP(newStory);
     
-    // 3. Пытаемся отправить в облако через JSONP
-    const cloudSaved = await saveToCloudJSONP(newStory);
-    
-    // 4. Обновляем интерфейс
+    // 3. Обновляем интерфейс
     displayStories('newest');
     updateStats();
     
-    return {
-        success: true,
-        cloudSaved: cloudSaved,
-        story: newStory
-    };
+    return cloudSuccess;
 }
 
-// === 4. ФОРМА ===
+// === 5. ФОРМА ===
 function setupForm() {
     const form = document.getElementById('storyForm');
-    if (!form) {
-        console.error('❌ Форма не найдена!');
-        return;
-    }
+    if (!form) return;
     
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -262,43 +229,40 @@ function setupForm() {
         const content = document.getElementById('storyContent').value.trim();
         
         if (!author || !title || !content) {
-            showMessage('⚠️ Заполните все поля!', 'warning');
+            alert('Заполните все поля!');
             return;
         }
         
         // Показываем загрузку
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '⏳ Сохраняем...';
-        submitBtn.disabled = true;
+        const btn = form.querySelector('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '⏳ Сохраняем...';
+        btn.disabled = true;
         
         try {
-            const result = await addNewStory(author, title, content);
+            const success = await addNewStory(author, title, content);
             
-            if (result.success) {
-                if (result.cloudSaved) {
-                    showMessage('✅ История опубликована! Видна на всех устройствах!', 'success');
-                } else {
-                    showMessage('⚠️ История сохранена локально. В облако пока не отправлено.', 'warning');
-                }
-                
+            if (success) {
+                alert('✅ История сохранена и будет видна на всех устройствах!');
                 form.reset();
+            } else {
+                alert('⚠️ История сохранена локально. В облако не отправлено.');
             }
             
         } catch (error) {
             console.error('❌ Ошибка:', error);
-            showMessage('❌ Ошибка при сохранении', 'error');
+            alert('❌ Ошибка сохранения');
             
         } finally {
             // Восстанавливаем кнопку
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     });
 }
 
-// === 5. ОТОБРАЖЕНИЕ ИСТОРИЙ ===
-function displayStories(sortType = 'newest') {
+// === 6. ОТОБРАЖЕНИЕ ИСТОРИЙ ===
+function displayStories(sortType) {
     const container = document.getElementById('storiesContainer');
     const noStories = document.getElementById('noStories');
     
@@ -318,53 +282,45 @@ function displayStories(sortType = 'newest') {
     if (sortType === 'newest') {
         storiesToShow.sort((a, b) => b.id - a.id);
     } else if (sortType === 'popular') {
-        storiesToShow.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+        storiesToShow.sort((a, b) => b.likes - a.likes);
     }
     
     // Показываем
     storiesToShow.forEach(story => {
-        container.appendChild(createStoryElement(story));
+        const div = document.createElement('div');
+        div.className = 'story-card';
+        
+        div.innerHTML = `
+            <div class="story-header">
+                <div class="story-author">👤 ${story.author}</div>
+                <div class="story-date">📅 ${story.date}</div>
+            </div>
+            <h3>${story.title}</h3>
+            <div class="story-content">${story.content.replace(/\n/g, '<br>')}</div>
+            <div class="story-footer">
+                <button class="like-btn ${story.likedByUser ? 'liked' : ''}">
+                    ❤️ ${story.likedByUser ? 'Понравилось' : 'Нравится'}
+                </button>
+                <div>👍 ${story.likes} лайков</div>
+            </div>
+        `;
+        
+        div.querySelector('.like-btn').addEventListener('click', function() {
+            story.likedByUser = !story.likedByUser;
+            story.likes += story.likedByUser ? 1 : -1;
+            localStorage.setItem('vetaStories', JSON.stringify(stories));
+            displayStories(sortType);
+            updateStats();
+        });
+        
+        container.appendChild(div);
     });
-    
-    console.log(`👁️ Показано ${storiesToShow.length} историй`);
-}
-
-// === 6. СОЗДАНИЕ КАРТОЧКИ ===
-function createStoryElement(story) {
-    const div = document.createElement('div');
-    div.className = 'story-card';
-    
-    div.innerHTML = `
-        <div class="story-header">
-            <div class="story-author">👤 ${story.author || 'Аноним'}</div>
-            <div class="story-date">📅 ${story.date || ''}</div>
-        </div>
-        <h3 class="story-title">${story.title || 'Без названия'}</h3>
-        <div class="story-content">${(story.content || '').replace(/\n/g, '<br>')}</div>
-        <div class="story-footer">
-            <button class="like-btn ${story.likedByUser ? 'liked' : ''}">
-                ❤️ ${story.likedByUser ? 'Понравилось' : 'Нравится'}
-            </button>
-            <div class="like-count">👍 ${story.likes || 0} лайков</div>
-        </div>
-    `;
-    
-    // Лайк
-    div.querySelector('.like-btn').addEventListener('click', function() {
-        story.likedByUser = !story.likedByUser;
-        story.likes += story.likedByUser ? 1 : -1;
-        saveToLocalStorage();
-        displayStories('newest');
-        updateStats();
-    });
-    
-    return div;
 }
 
 // === 7. СТАТИСТИКА ===
 function updateStats() {
     const total = stories.length;
-    const likes = stories.reduce((sum, s) => sum + (s.likes || 0), 0);
+    const likes = stories.reduce((sum, s) => sum + s.likes, 0);
     const authors = new Set(stories.map(s => s.author)).size;
     
     const storiesEl = document.getElementById('totalStories');
@@ -387,37 +343,20 @@ function setupSortButtons() {
     });
 }
 
-// === 9. УТИЛИТЫ ===
-function showMessage(text, type = 'info') {
-    alert(text); // Пока просто alert
-}
-
-// === 10. ПРИМЕРНЫЕ ИСТОРИИ ===
+// === 9. ПРИМЕРНЫЕ ИСТОРИИ ===
 if (stories.length === 0 && !localStorage.getItem('vetaStories')) {
-    console.log('🎁 Добавляем примерные истории...');
-    
     stories = [
         {
             id: 1,
             author: "Анна",
-            title: "Мой первый концерт Веты",
-            content: "Это было невероятно! Вета пела так, что у всех мурашки по коже.",
-            date: "Сегодня",
-            likes: 5,
+            title: "Тестовая история",
+            content: "Это проверка работы облака",
+            date: new Date().toLocaleDateString(),
+            likes: 0,
             likedByUser: false
         }
     ];
-    
-    saveToLocalStorage();
+    localStorage.setItem('vetaStories', JSON.stringify(stories));
     displayStories('newest');
     updateStats();
 }
-
-// === 11. ПЕРИОДИЧЕСКАЯ СИНХРОНИЗАЦИЯ ===
-// Каждые 5 минут обновляем из облака
-setInterval(async () => {
-    console.log('🔄 Автосинхронизация...');
-    await loadFromCloudJSONP();
-    displayStories('newest');
-    updateStats();
-}, 5 * 60 * 1000);
