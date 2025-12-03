@@ -1,64 +1,138 @@
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxvBcGJUp4J0e5OMJjR1E0-WA7fOcUawxt2XVkNrv1F5o9-OL-uf1ViTFFIZJ0ti7LUEQ/exec';
 
+// ГЛАВНЫЙ МАССИВ ИСТОРИЙ
 let stories = [];
 
-// 1. ВСЕ ФУНКЦИИ ОПРЕДЕЛЕНЫ - НЕТ ОШИБОК
+// ============ 1. ЗАГРУЗКА САЙТА ============
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('✅ Сайт загружен');
-    loadStories();
+    console.log('🚀 Сайт загружен!');
+    
+    // СНАЧАЛА грузим истории
+    loadStoriesFromLocalStorage();
+    
+    // ПОТОМ настраиваем всё остальное
     setupForm();
     setupSortButtons();
+    updateStats();
 });
 
-// 2. ЗАГРУЗКА ИЗ GOOGLE SHEETS + ЛОКАЛЬНОЕ ХРАНЕНИЕ
-async function loadStories() {
+// ============ 2. ГАРАНТИРОВАННАЯ ЗАГРУЗКА ИЗ LOCALSTORAGE ============
+function loadStoriesFromLocalStorage() {
+    console.log('📂 Ищем истории в localStorage...');
+    
+    const saved = localStorage.getItem('vetaFanStories');
+    console.log('📁 Данные из localStorage:', saved ? 'есть' : 'нет');
+    
+    if (saved) {
+        try {
+            stories = JSON.parse(saved);
+            console.log(`✅ Загружено ${stories.length} историй из localStorage`);
+        } catch (error) {
+            console.log('❌ Ошибка парсинга localStorage:', error);
+            stories = [];
+        }
+    } else {
+        console.log('📭 localStorage пуст');
+        stories = [];
+    }
+    
+    // Показываем истории
+    displayStories('newest');
+    
+    // Пробуем загрузить из облака (в фоне)
+    loadStoriesFromGoogleSheets();
+}
+
+// ============ 3. ЗАГРУЗКА ИЗ GOOGLE SHEETS (дополнительно) ============
+async function loadStoriesFromGoogleSheets() {
     try {
-        console.log('📡 Загружаем истории из Google Sheets...');
+        console.log('☁️ Пробуем загрузить из Google Sheets...');
         const response = await fetch(GOOGLE_SCRIPT_URL);
         
         if (response.ok) {
             const data = await response.json();
-            stories = data.stories || [];
-            console.log(`✅ Загружено ${stories.length} историй из облака`);
+            const cloudStories = data.stories || [];
+            console.log(`☁️ В облаке найдено: ${cloudStories.length} историй`);
             
-            // Сохраняем в localStorage как резервную копию
-            localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-        } else {
-            throw new Error('Ошибка загрузки из облака');
+            if (cloudStories.length > 0) {
+                // Объединяем с локальными
+                stories = [...cloudStories, ...stories];
+                // Убираем дубликаты
+                stories = stories.filter((story, index, self) =>
+                    index === self.findIndex(s => s.id === story.id)
+                );
+                // Сохраняем обратно в localStorage
+                saveStoriesToLocalStorage();
+                // Обновляем отображение
+                displayStories('newest');
+                updateStats();
+            }
         }
     } catch (error) {
-        console.log('⚠️ Используем локальные данные...');
-        const localStories = localStorage.getItem('vetaFanStories');
-        stories = localStories ? JSON.parse(localStories) : [];
-        console.log(`📁 Загружено ${stories.length} локальных историй`);
+        console.log('⚠️ Google Sheets недоступен');
     }
-    
-    displayStories('newest');
-    updateStats();
 }
 
-// 3. ОТПРАВКА В GOOGLE SHEETS
-async function saveStoryToGoogleSheets(story) {
+// ============ 4. СОХРАНЕНИЕ В LOCALSTORAGE ============
+function saveStoriesToLocalStorage() {
+    console.log('💾 Сохраняем в localStorage...', stories.length, 'историй');
+    localStorage.setItem('vetaFanStories', JSON.stringify(stories));
+    console.log('✅ Успешно сохранено в localStorage');
+}
+
+// ============ 5. ДОБАВЛЕНИЕ НОВОЙ ИСТОРИИ ============
+async function addNewStory(author, title, content) {
+    const newStory = {
+        id: Date.now(), // Уникальный ID
+        author: author,
+        title: title,
+        content: content,
+        date: new Date().toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }),
+        likes: 0,
+        likedByUser: false
+    };
+    
+    console.log('➕ Добавляем новую историю:', newStory);
+    
+    // 1. Добавляем в массив
+    stories.unshift(newStory);
+    
+    // 2. СОХРАНЯЕМ В LOCALSTORAGE (гарантированно!)
+    saveStoriesToLocalStorage();
+    
+    // 3. Пробуем отправить в облако (не блокируем)
     try {
-        console.log('☁️ Отправляем в облако:', story);
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(story)
+            body: JSON.stringify(newStory)
         });
-        console.log('✅ Успешно отправлено в облако');
-        return true;
+        console.log('✅ Отправлено в Google Sheets');
     } catch (error) {
-        console.log('❌ Ошибка отправки в облако:', error);
-        return false;
+        console.log('⚠️ Не удалось отправить в облако');
     }
+    
+    // 4. Обновляем интерфейс
+    displayStories('newest');
+    updateStats();
+    
+    return true;
 }
 
-// 4. ФОРМА ДОБАВЛЕНИЯ (РАБОТАЕТ ЛОКАЛЬНО И В ОБЛАКО)
+// ============ 6. ФОРМА ============
 function setupForm() {
     const form = document.getElementById('storyForm');
-    if (!form) return;
+    if (!form) {
+        console.log('❌ Форма не найдена!');
+        return;
+    }
     
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -67,76 +141,63 @@ function setupForm() {
         const title = document.getElementById('storyTitle').value.trim();
         const content = document.getElementById('storyContent').value.trim();
         
-        if (author && title && content) {
-            const newStory = {
-                id: Date.now(),
-                author: author,
-                title: title,
-                content: content,
-                date: new Date().toLocaleDateString('ru-RU', {
-                    day: 'numeric', month: 'long', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                }),
-                likes: 0,
-                likedByUser: false
-            };
-            
-            showNotification('💾 Сохраняем историю...');
-            
-            // 1. Сохраняем ЛОКАЛЬНО (работает всегда)
-            stories.unshift(newStory);
-            localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-            
-            // 2. Пытаемся сохранить в ОБЛАКО
-            const cloudSaved = await saveStoryToGoogleSheets(newStory);
-            
-            // 3. Обновляем интерфейс
-            displayStories('newest');
-            updateStats();
+        if (!author || !title || !content) {
+            showNotification('⚠️ Заполните все поля!');
+            return;
+        }
+        
+        showNotification('💾 Сохраняем историю...');
+        
+        const success = await addNewStory(author, title, content);
+        
+        if (success) {
             form.reset();
-            
-            if (cloudSaved) {
-                showNotification('✅ История сохранена и будет видна на всех устройствах!');
-            } else {
-                showNotification('⚠️ История сохранена локально. На других устройствах пока не видна.');
-            }
+            showNotification('✅ История сохранена!');
         }
     });
 }
 
-// 5. ОТОБРАЖЕНИЕ ИСТОРИЙ
+// ============ 7. ОТОБРАЖЕНИЕ ИСТОРИЙ ============
 function displayStories(sortType) {
     const container = document.getElementById('storiesContainer');
     const noStories = document.getElementById('noStories');
     
-    if (!container) return;
+    if (!container) {
+        console.log('❌ Контейнер историй не найден!');
+        return;
+    }
     
     container.innerHTML = '';
     
-    let storiesToShow = [...stories];
+    if (!stories || stories.length === 0) {
+        if (noStories) noStories.style.display = 'block';
+        console.log('📭 Нет историй для показа');
+        return;
+    }
     
+    if (noStories) noStories.style.display = 'none';
+    
+    // Сортировка
+    let storiesToShow = [...stories];
     if (sortType === 'newest') {
         storiesToShow.sort((a, b) => b.id - a.id);
     } else if (sortType === 'popular') {
         storiesToShow.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     }
     
-    if (storiesToShow.length === 0) {
-        if (noStories) noStories.style.display = 'block';
-        return;
-    }
-    
-    if (noStories) noStories.style.display = 'none';
-    
+    // Создаем карточки
     storiesToShow.forEach(story => {
         container.appendChild(createStoryElement(story));
     });
+    
+    console.log(`👁️ Показано ${storiesToShow.length} историй`);
 }
 
-// 6. СОЗДАНИЕ КАРТОЧКИ
+// ============ 8. СОЗДАНИЕ КАРТОЧКИ ============
 function createStoryElement(story) {
     const div = document.createElement('div');
     div.className = 'story-card';
+    div.dataset.id = story.id;
     
     div.innerHTML = `
         <div class="story-header">
@@ -144,7 +205,7 @@ function createStoryElement(story) {
                 <i class="fas fa-user"></i> ${escapeHtml(story.author || 'Аноним')}
             </div>
             <div class="story-date">
-                <i class="far fa-calendar"></i> ${story.date || 'Неизвестно'}
+                <i class="far fa-calendar"></i> ${story.date || 'Без даты'}
             </div>
         </div>
         <h3 class="story-title">${escapeHtml(story.title || 'Без названия')}</h3>
@@ -154,70 +215,96 @@ function createStoryElement(story) {
                 <i class="fas fa-heart"></i> ${story.likedByUser ? 'Понравилось' : 'Нравится'}
             </button>
             <div class="like-count">
-                <i class="fas fa-thumbs-up"></i> ${story.likes || 0} лайков
+                <i class="fas fa-thumbs-up"></i> <span class="likes-count">${story.likes || 0}</span> лайков
             </div>
         </div>
     `;
     
-    div.querySelector('.like-btn').addEventListener('click', () => toggleLike(story.id));
+    // Лайк
+    div.querySelector('.like-btn').addEventListener('click', function() {
+        toggleLike(story.id);
+    });
     
     return div;
 }
 
-// 7. ЛАЙКИ (работают локально)
+// ============ 9. ЛАЙКИ ============
 function toggleLike(storyId) {
     const storyIndex = stories.findIndex(s => s.id === storyId);
     if (storyIndex === -1) return;
     
-    if (stories[storyIndex].likedByUser) {
-        stories[storyIndex].likes = (stories[storyIndex].likes || 0) - 1;
-        stories[storyIndex].likedByUser = false;
+    const story = stories[storyIndex];
+    
+    if (story.likedByUser) {
+        story.likes = Math.max(0, (story.likes || 0) - 1);
+        story.likedByUser = false;
     } else {
-        stories[storyIndex].likes = (stories[storyIndex].likes || 0) + 1;
-        stories[storyIndex].likedByUser = true;
+        story.likes = (story.likes || 0) + 1;
+        story.likedByUser = true;
     }
     
-    localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-    displayStories('newest');
+    // СОХРАНЯЕМ!
+    saveStoriesToLocalStorage();
+    
+    // Обновляем карточку
+    const storyEl = document.querySelector(`[data-id="${storyId}"]`);
+    if (storyEl) {
+        const likeBtn = storyEl.querySelector('.like-btn');
+        const likesCount = storyEl.querySelector('.likes-count');
+        
+        likeBtn.innerHTML = `<i class="fas fa-heart"></i> ${story.likedByUser ? 'Понравилось' : 'Нравится'}`;
+        likeBtn.classList.toggle('liked', story.likedByUser);
+        if (likesCount) likesCount.textContent = story.likes;
+    }
+    
     updateStats();
+    showNotification(story.likedByUser ? '❤️ Лайк!' : '💔 Лайк убран');
 }
 
-// 8. СТАТИСТИКА
+// ============ 10. СТАТИСТИКА ============
 function updateStats() {
     const totalStories = stories.length;
     const totalLikes = stories.reduce((sum, s) => sum + (s.likes || 0), 0);
-    const totalAuthors = new Set(stories.map(s => s.author)).size;
+    const authors = new Set(stories.map(s => s.author).filter(Boolean));
+    const totalAuthors = authors.size;
     
-    const storiesEl = document.getElementById('totalStories');
-    const likesEl = document.getElementById('totalLikes');
-    const authorsEl = document.getElementById('totalAuthors');
+    // Обновляем на странице
+    const elements = {
+        'totalStories': totalStories,
+        'totalLikes': totalLikes,
+        'totalAuthors': totalAuthors
+    };
     
-    if (storiesEl) storiesEl.textContent = totalStories;
-    if (likesEl) likesEl.textContent = totalLikes;
-    if (authorsEl) authorsEl.textContent = totalAuthors;
+    Object.entries(elements).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    });
 }
 
-// 9. КНОПКИ СОРТИРОВКИ
+// ============ 11. КНОПКИ СОРТИРОВКИ ============
 function setupSortButtons() {
-    const sortButtons = document.querySelectorAll('.sort-btn');
-    
-    sortButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            sortButtons.forEach(btn => btn.classList.remove('active'));
+    const buttons = document.querySelectorAll('.sort-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            buttons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             displayStories(this.dataset.sort);
         });
     });
 }
 
-// 10. УТИЛИТЫ
+// ============ 12. УТИЛИТЫ ============
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
 function showNotification(message) {
+    // Удаляем старые
+    document.querySelectorAll('.notification').forEach(n => n.remove());
+    
     const notification = document.createElement('div');
     notification.className = 'notification';
     notification.textContent = message;
@@ -226,57 +313,50 @@ function showNotification(message) {
         background: linear-gradient(90deg, #ff6b8b, #ff8e53);
         color: white; padding: 12px 20px; border-radius: 10px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 1000;
-        font-weight: 600; animation: slideIn 0.3s ease-out;
+        font-weight: 600; animation: fadeIn 0.3s;
     `;
     
     document.body.appendChild(notification);
     
     setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-in';
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
-    
-    if (!document.querySelector('#notification-styles')) {
-        const style = document.createElement('style');
-        style.id = 'notification-styles';
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
-    }
 }
 
-// 11. ПРИМЕРНЫЕ ИСТОРИИ ПРИ ПЕРВОМ ЗАПУСКЕ
-if (!localStorage.getItem('vetaFanStories') && stories.length === 0) {
-    stories = [
-        {
-            id: 1,
-            author: "Анна",
-            title: "Первая встреча с Ветой",
-            content: "Я помню, как впервые увидела Вету на концерте. Это было невероятно!",
-            date: "15 октября 2023",
-            likes: 42,
-            likedByUser: false
-        },
-        {
-            id: 2,
-            author: "Максим",
-            title: "Лучший концерт в моей жизни",
-            content: "Был на выступлении Веты в прошлом месяце. Незабываемые эмоции!",
-            date: "10 октября 2023",
-            likes: 28,
-            likedByUser: false
+// ============ 13. ПРИМЕРНЫЕ ИСТОРИИ ============
+// Добавляем только если совсем пусто
+window.addEventListener('load', function() {
+    setTimeout(() => {
+        if (!localStorage.getItem('vetaFanStories') || stories.length === 0) {
+            console.log('🎁 Добавляем примерные истории...');
+            
+            stories = [
+                {
+                    id: 1,
+                    author: "Анна",
+                    title: "Первая встреча с Ветой",
+                    content: "Я помню, как впервые увидела Вету на концерте. Это было невероятно!",
+                    date: "15 октября 2023",
+                    likes: 12,
+                    likedByUser: false
+                },
+                {
+                    id: 2,
+                    author: "Максим",
+                    title: "Незабываемый вечер",
+                    content: "Концерт Веты в нашем городе был лучшим событием года!",
+                    date: "10 октября 2023",
+                    likes: 8,
+                    likedByUser: false
+                }
+            ];
+            
+            saveStoriesToLocalStorage();
+            displayStories('newest');
+            updateStats();
+            console.log('✅ Примерные истории добавлены');
         }
-    ];
-    
-    localStorage.setItem('vetaFanStories', JSON.stringify(stories));
-    displayStories('newest');
-    updateStats();
-}
+    }, 1000);
+});
