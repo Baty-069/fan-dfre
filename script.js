@@ -1,6 +1,6 @@
 // === НАСТРОЙКИ ===
 // ВСТАВЬ СЮДА СВОЮ ССЫЛКУ ИЗ APPS SCRIPT!
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/ТВОЙ_НОВЫЙ_ID/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby39DxMjetd73rdn896heh-W5s4uvipZYiz3hR5D--ofM_nk79wVJwX9EySxAqjC4Rk/exec';
 
 // === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
 let stories = [];
@@ -541,3 +541,4 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     showMessage('⚠️ Вы в оффлайн режиме. История будет сохранена локально.', 'warning');
 });
+
